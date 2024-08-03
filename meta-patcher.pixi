@@ -1,0 +1,121 @@
+fn print_array($array) {
+    logf( "$array %d\n", $array )
+    array = clone($array)
+    array_siz = get_size(array)
+    logf("mod_array_id=%d,size=%d\n", array, array_siz)
+    for ( arr_idx = 0; arr_idx <= array_siz; arr_idx + 1 ) {
+        logf("[%d]=%d ", arr_idx, array[arr_idx])
+    }
+    logf("\n")
+    remove(array)
+}
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+MOD_WIDTH = 128
+MOD_HEIGHT = MOD_WIDTH * 1
+N_MODULES_X = 10
+N_MODULES_Y = 10
+
+///////////////////////////////////////////////////////////////////////////////
+sv = sv_new()
+
+version_major = ( SV_VERSION >> 24 ) & 255;
+version_minor1 = ( SV_VERSION >> 16 ) & 255;
+version_minor2 = ( SV_VERSION >> 8 ) & 255;
+version_minor3 = SV_VERSION & 255;
+logf( "SunVox version: %d.%d.%d.%d\n", version_major, version_minor1, version_minor2, version_minor3 )
+
+
+sv_lock( sv )
+
+output_mod_pos = sv_get_module_xy(sv, 0)
+logf ("output_mod_pos=%016X\n", output_mod_pos)
+output_mod_xy = new(2)
+output_mod_xy[0] = output_mod_pos & 0xFFFF
+output_mod_xy[1] = ( output_mod_pos >> 16 ) & 0xFFFF
+
+logf( "initial_position,x=%d,y=%d,raw=%016X\n", output_mod_xy[0], output_mod_xy[1], output_mod_pos)
+
+init_module_x = output_mod_xy[0] - (MOD_WIDTH * (N_MODULES_X))
+init_module_y = output_mod_xy[1] - (MOD_HEIGHT * (N_MODULES_Y)) / 2 + (MOD_HEIGHT / 2)
+
+remove( output_mod_xy )
+
+mod_array_id = new( N_MODULES_X, N_MODULES_Y, INT )
+clean( mod_array_id )
+logf ("mod_array_id=%d,size=%d\n", mod_array_id, get_size(mod_array_id))
+
+
+for ( i = 0; i < N_MODULES_X; i + 1 ) {
+    for ( j = 0; j < N_MODULES_Y; j + 1 ) {
+        mod_name = ""
+        module_type = "Amplifier"
+        sprintf( mod_name, "in_i%02d_j%02d", i, j)
+        logf( "mod_name=%s ", mod_name )
+        new_module_x = init_module_x + (MOD_WIDTH * i)
+        new_module_y = init_module_y + (MOD_HEIGHT * j)
+        logf( "new_module:x=%04d,y=%04d ", new_module_x, new_module_y )
+        new_module_id = sv_new_module(sv, module_type, mod_name, new_module_x, new_module_y, 0)
+        logf( "new_module_id=%04d ", new_module_id )
+        mod_array_id[i,j] = new_module_id
+        logf( "mod_array_id[i=%04d][j=%04d]=%04d\n", i, j, mod_array_id[i,j] )
+
+        // graphics
+        box( new_module_x, new_module_y, MOD_WIDTH, MOD_HEIGHT, sv_get_module_color(sv, new_module_id) )
+        text = ""
+        sprintf( text, "%s\n%s", mod_name, module_type )
+        print(  text, new_module_x, new_module_y, WHITE)
+
+        
+        prev_i = i - 1
+        if (prev_i >= 0 && prev_i <= N_MODULES_X)
+        {   
+            conn_mod_id_to = new_module_id
+            conn_mod_id_from = mod_array_id[prev_i,j]
+            logf( "mod_array_id[prev_i=%04d][j=%04d]=%04d ", prev_i, j, mod_array_id[prev_i,j] )
+            if (conn_mod_id_from <= 0){continue}
+            logf( "connect:conn_mod_id_from=%04d,conn_mod_id_to=%04d\n", conn_mod_id_from, conn_mod_id_to)
+            if (conn_mod_id_from == conn_mod_id_to) {
+                logf( "WARNING:avoiding self-connection\n")
+                continue
+            }
+            sv_connect_module(sv, conn_mod_id_from, conn_mod_id_to)
+        }
+    }
+}
+
+for (j = 0; j < N_MODULES_Y; j + 1 ) {
+
+    module_id = mod_array_id[N_MODULES_X - 1, j]
+    logf( "connect to output module module_id=%d\n", module_id)
+    sv_connect_module(sv, module_id, 0)
+}
+
+// middle_end_mod_id = mod_array_id[N_MODULES_Y - 1, N_MODULES_X / 2]
+// middle_end_mod_pos = sv_get_module_xy(sv, middle_end_mod_id)
+
+// logf( "middle_end_mod_pos=%016X,middle_end_mod_id=%0X\n", middle_end_mod_pos, middle_end_mod_id)
+
+// middle_end_mod_xy = unpack_xy( middle_end_mod_pos )
+
+// logf( "middle_end_module,x=%d,y=%d\n", middle_end_mod_xy[0], middle_end_mod_xy[1] )
+
+// sv_set_module_xy(sv, 0, middle_end_mod_xy[0] + MOD_WIDTH, middle_end_mod_xy[1])
+
+
+remove( mod_name )
+remove( mod_array_id )
+
+
+fname = ""
+sprintf(fname, "test.sunvox")
+remove_file( fname )
+sleep( 1000 )
+logf( "Saving as %s\n", fname )
+sv_save( sv, fname )
+
+sv_unlock( sv )
+
+sv_remove( sv )
